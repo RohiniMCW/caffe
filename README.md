@@ -22,6 +22,49 @@ Framework development discussions and thorough bug reports are collected on [Iss
 
 Happy brewing!
 
+## MCWPrune
+
+MCWPrune/Caffe is developed by MulticoreWare for squeezing Convolution and InnerProduct layers by pruning the network. This repository is an enhancement of [Dynamic Network Surgery](https://github.com/yiwenguo/Dynamic-Network-Surgery) with additional features and techniques to improve accuracy.
+
+This fork of Caffe has two new additional layers namely SqueezeConvolution and SqueezeInnerProduct for pruning and splicing the Convolution and InnerProduct layers respectively. To enable these layers, use layer type as  SqueezeConvolution and SqueezeInnerProduct in the prototxt and for the layer params - squeeze_convolution_param and squeeze_inner_product_param refer the example below: 
+  ~~~~
+  squeeze_convolution_param {
+    num_output: 96
+    kernel_size: 11
+    stride: 4
+    gamma: 0.00001
+    power: 1
+    c_rate: 0.3
+    iter_stop: 40000
+    weight_mask_filler {
+      type: "constant"
+      value: 1
+    }
+    bias_mask_filler {
+      type: "constant"
+      value: 1
+    }
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+~~~~
+
+C_rate controls the rate for pruning for every layer. Higher the c_rate, more the pruning happens.
+For improving accuracy of the pruned caffemodel, techniques like Retraining and Dynamic Splicing are implemented in the code.
+
+ For retraining and Dynamic Splicing, turn on the corresponding flags in squeeze_conv_layer.h and squeeze_inner_product_layer.h. 
+ 
+Other tools for processing the caffemodel - applying the masks on weights, printing the compression factor, truncating masks from the caffemodel can be found in miscellaneous_scripts folder.
+
+The code changes are made upon Caffe-rc5 tag.
+
+
 ## License and Citation
 
 Caffe is released under the [BSD 2-Clause license](https://github.com/BVLC/caffe/blob/master/LICENSE).
