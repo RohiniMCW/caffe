@@ -8,6 +8,7 @@
 #include "caffe/layer.hpp"
 #include "caffe/layer_factory.hpp"
 #include "caffe/layers/conv_layer.hpp"
+#include "caffe/layers/squeeze_conv_layer.hpp"
 #include "caffe/layers/lrn_layer.hpp"
 #include "caffe/layers/pooling_layer.hpp"
 #include "caffe/layers/relu_layer.hpp"
@@ -72,6 +73,33 @@ shared_ptr<Layer<Dtype> > GetConvolutionLayer(
 }
 
 REGISTER_LAYER_CREATOR(Convolution, GetConvolutionLayer);
+
+/**************** MulticoreWare_Modified - Feature: Pruning / Splicing ****************/
+// Register new layer - SqueezeConvolution
+template <typename Dtype>
+shared_ptr<Layer<Dtype> > GetSqueezeConvolutionLayer(
+    const LayerParameter& param) {
+  SqueezeConvolutionParameter_Engine engine = param.squeeze_convolution_param().engine();
+  if (engine == SqueezeConvolutionParameter_Engine_DEFAULT) {
+    engine = SqueezeConvolutionParameter_Engine_CAFFE;
+#ifdef USE_CUDNN
+    engine = SqueezeConvolutionParameter_Engine_CUDNN;
+#endif
+  }
+  if (engine == SqueezeConvolutionParameter_Engine_CAFFE) {
+    return shared_ptr<Layer<Dtype> >(new SqueezeConvolutionLayer<Dtype>(param));
+#ifdef USE_CUDNN
+  } else if (engine == SqueezeConvolutionParameter_Engine_CUDNN) {
+    return shared_ptr<Layer<Dtype> >(new CuDNNSqueezeConvolutionLayer<Dtype>(param));
+#endif
+  } else {
+    LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+  }
+}
+
+REGISTER_LAYER_CREATOR(SqueezeConvolution, GetSqueezeConvolutionLayer);
+/***********************************************************************************/
+
 
 // Get pooling layer according to engine.
 template <typename Dtype>
