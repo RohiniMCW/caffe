@@ -1,10 +1,11 @@
 /***************************** MulticoreWare_Modified - Feature: Pruning / Splicing ************************************/
 #include <vector>
+#include <cmath>
+#include<stdio.h>
 
 #include "caffe/filler.hpp"
 #include "caffe/layers/squeeze_conv_layer.hpp"
-#include <cmath>
-#include<stdio.h>
+
 
 namespace caffe {
 
@@ -173,7 +174,7 @@ void SqueezeConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bot
       this->std /= ncount; this->std = sqrt(std);
       LOG(INFO)<<mu<<"  "<<std<<"  "<<ncount<<"\n";
     }
-    // No pruning done during Retraining
+// No pruning/splicing during Retraining
 #if !RETRAINING 
     // Calculate the weight mask and bias mask with probability
     Dtype r = static_cast<Dtype>(rand())/static_cast<Dtype>(RAND_MAX);
@@ -191,8 +192,8 @@ void SqueezeConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bot
       }
     }
 #endif
-   // Dynamic Splicing
-   // Randomly unprune the pruned weights based on the splicing ratio
+// Dynamic Splicing
+// Randomly unprune the pruned weights based on the splicing ratio
 #if DYNAMIC_SPLICING
     if (this->iter_ == 0) {
       vector<int> index_zero;
@@ -244,13 +245,13 @@ template <typename Dtype>
 void SqueezeConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   const Dtype* weightTmp = this->weight_tmp_.gpu_data();
-	const Dtype* weightMask = this->blobs_[2]->gpu_data();
-	Dtype* weight_diff = this->blobs_[0]->mutable_gpu_diff();
-  for (int i = 0; i < top.size(); ++i) {    
+  const Dtype* weightMask = this->blobs_[2]->gpu_data();
+  Dtype* weight_diff = this->blobs_[0]->mutable_gpu_diff();
+  for (int i = 0; i < top.size(); ++i) {
     const Dtype* top_diff = top[i]->gpu_diff();
     // Bias gradient, if necessary.
     if (this->bias_term_ && this->param_propagate_down_[1]) {
-			const Dtype* biasMask = this->blobs_[3]->gpu_data();
+      const Dtype* biasMask = this->blobs_[3]->gpu_data();
       Dtype* bias_diff = this->blobs_[1]->mutable_gpu_diff();
       SqueezeCMaskApply<Dtype><<<CAFFE_GET_BLOCKS(this->blobs_[3]->count()),
         CAFFE_CUDA_NUM_THREADS>>>( this->blobs_[3]->count(), bias_diff, biasMask, bias_diff);
@@ -282,6 +283,5 @@ void SqueezeConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& to
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(SqueezeConvolutionLayer);
-
 }  // namespace caffe
 /***********************************************************************************************************************/

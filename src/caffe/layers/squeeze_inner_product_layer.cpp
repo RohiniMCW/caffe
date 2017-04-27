@@ -127,7 +127,7 @@ void SqueezeInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bo
 
   if (this->phase_ == TRAIN){
     // Calculate the mean and standard deviation of learnable parameters 
-    if (this->std == 0 && this->iter_ == 0){
+    if (this->std == 0 && this->iter_ == 0) {
       unsigned int ncount = 0;
       for (unsigned int k = 0;k < this->blobs_[0]->count(); ++k) {
         this->mu  += fabs(weight[k]);
@@ -146,7 +146,7 @@ void SqueezeInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bo
       LOG(INFO)<<mu<<"  "<<std<<"  "<<ncount<<"\n";
     }
 
-    // No pruning done during Retraining
+// No pruning done during Retraining
 #if !RETRAINING 
     // Calculate the weight mask and bias mask with probability
     Dtype r = static_cast<Dtype>(rand())/static_cast<Dtype>(RAND_MAX);
@@ -169,25 +169,27 @@ void SqueezeInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bo
     }
 #endif
 
-    // Dynamic Splicing
-    // Randomly unprune the pruned weights based on the splicing ratio
-    // Set Splicing rate in squeeze_inner_product_layer.h
+// Dynamic Splicing
+// Randomly unprune the pruned weights based on the splicing ratio
+// Set Splicing rate in squeeze_inner_product_layer.h
 #if DYNAMIC_SPLICING
     if (this->iter_ == 0) {
       vector<int> index_zero;
-  
+      Dtype* weightMask_cpu = (Dtype *)malloc(this->blobs_[0]->count() *(sizeof(Dtype)));
+      cudaMemcpy(weightMask_cpu, weightMask, this->blobs_[0]->count() *(sizeof(Dtype)), cudaMemcpyDeviceToHost);
       for (unsigned int k = 0; k < this->blobs_[0]->count(); ++k) {
-          if(weightMask[k] == 0) {
-              index_zero.push_back(k);
-          }
+        if(weightMask_cpu[k] == 0) 
+          index_zero.push_back(k);
       }
       int zero_count = index_zero.size();
       int to_bespliced = zero_count * IP_SPLICING_RATE;
       std::random_shuffle(index_zero.begin(), index_zero.end());
 
-      for (unsigned int k = 0; k < to_bespliced; ++k) {
-          weightMask[index_zero[k]] = 1;
-      }
+      for (unsigned int k = 0; k < to_bespliced; ++k)
+        weightMask_cpu[index_zero[k]] = 1;
+
+    cudaMemcpy(weightMask, weightMask_cpu, this->blobs_[0]->count() *(sizeof(Dtype)), cudaMemcpyHostToDevice);
+    free(weightMask_cpu);
     }
 #endif
 
@@ -227,7 +229,7 @@ void SqueezeInnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& t
     // Gradient with respect to weight
     for (unsigned int k = 0;k < this->blobs_[0]->count(); ++k) {
       weight_diff[k] = weight_diff[k]*weightMask[k];
-    }		
+    }
     caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, N_, K_, M_, (Dtype)1.,
         top_diff, bottom_data, (Dtype)1., weight_diff);
   }
