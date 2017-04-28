@@ -68,6 +68,28 @@ void SqueezeConvolutionLayer<Dtype>::compute_output_shape() {
 }
 
 template <typename Dtype>
+void SqueezeConvolutionLayer<Dtype>::AggregateParams(const int n, const Dtype* wb, const Dtype* mask,
+    Dtype* mu, Dtype* std, unsigned int *count) {
+  for (unsigned int k = 0;k < n; ++k) {
+    this->mu  += fabs(mask[k] * wb[k]);
+    this->std += mask[k] * wb[k] * wb[k];
+    if (mask[k] * wb[k] != 0) (*count)++;
+  }
+}
+
+template <typename Dtype>
+void SqueezeConvolutionLayer<Dtype>::CalculateMask(const int n, const Dtype* wb, Dtype* mask,
+    Dtype mu, Dtype std, Dtype r) {
+  for (unsigned int k = 0;k < n;++k) {
+        // The constants 0.9 and 1.1 is to set margin that witholds few parameters undergoing pruning / splicing
+        if (mask[k] == 1 && fabs(wb[k]) <= 0.9 * r *  std::max(mu + std, Dtype(0)))
+          mask[k] = 0; //Pruning
+        else if (mask[k] == 0 && fabs(wb[k]) > 1.1 * r * std::max(mu + std, Dtype(0)))
+          mask[k] = 1; //Splicing
+      }
+}
+
+template <typename Dtype>
 void SqueezeConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   const Dtype* weight = this->blobs_[0]->mutable_cpu_data();
@@ -85,47 +107,26 @@ void SqueezeConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bot
 
   // Core logic for Pruning/Splicing
   if (this->phase_ == TRAIN) {
-    unsigned int ncount;
     // Calculate the mean and standard deviation of learnable parameters 
     if ((this->std == 0 && this->iter_ == 0) || this->iter_== 40 || this->iter_== 80 || this->iter_== 120 || this->iter_== 160) {
-      ncount = 0;
-      for (unsigned int k = 0;k < this->blobs_[0]->count(); ++k) {
-        this->mu  += fabs(weightMask[k] * weight[k]);
-        this->std += weightMask[k] * weight[k] * weight[k];
-        if (weightMask[k] * weight[k] != 0) ncount++;
-      }
+      unsigned int ncount = 0;
+      AggregateParams(this->blobs_[0]->count(), weight, weightMask, &mu, &std, &ncount);
       if (this->bias_term_) {
-        for (unsigned int k = 0;k < this->blobs_[1]->count(); ++k) {
-          this->mu  += fabs(biasMask[k] * bias[k]);
-          this->std += biasMask[k] * bias[k] * bias[k];
-          if (biasMask[k] * bias[k] != 0) ncount++;
-        }
+        AggregateParams(this->blobs_[1]->count(), bias, biasMask, &mu, &std, &ncount);
       }
-      this->mu /= ncount; this->std -= ncount * mu * mu; 
+      this->mu /= ncount; this->std -= ncount * mu * mu;
       this->std /= ncount; this->std = sqrt(std);
-    } 
+    }
 
 // No pruning/splicing during Retraining
 #if !RETRAINING 
   // Calculate the weight mask and bias mask with probability
     Dtype r = static_cast<Dtype>(rand())/static_cast<Dtype>(RAND_MAX);
     if (pow(1 + (this->gamma) * (this->iter_), -(this->power)) > r && (this->iter_) < (this->iter_stop_)) {
-
-      for (unsigned int k = 0;k < this->blobs_[0]->count();++k) {
-        // The constants 0.9 and 1.1 is to set margin that witholds few parameters undergoing pruning / splicing
-        if (weightMask[k] == 1 && fabs(weight[k]) <= 0.9 * crate *  std::max(mu + std, Dtype(0)))
-          weightMask[k] = 0; //Pruning
-        else if (weightMask[k] == 0 && fabs(weight[k]) > 1.1 * crate * std::max(mu + std, Dtype(0)))
-          weightMask[k] = 1; //Splicing
-      }
-      if (this->bias_term_) {
-        for (unsigned int k = 0;k < this->blobs_[1]->count(); ++k) {
-          if (biasMask[k] == 1 && fabs(bias[k]) <= 0.9 * crate * std::max(mu + std, Dtype(0)))
-            biasMask[k] = 0;
-          else if (biasMask[k] == 0 && fabs(bias[k]) > 1.1 * crate * std::max(mu + std, Dtype(0)))
-            biasMask[k] = 1;
-        }
-      }
+      CalculateMask(this->blobs_[0]->count(), weight, weightMask, this->mu, this->std, this->crate);  
+      if (this->bias_term_) {       
+        CalculateMask(this->blobs_[1]->count(), bias, biasMask, this->mu, this->std, this->crate);
+      } 
     }
   #endif
 

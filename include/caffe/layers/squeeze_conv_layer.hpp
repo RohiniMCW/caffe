@@ -84,6 +84,10 @@ class SqueezeConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void compute_output_shape();
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
+  virtual void AggregateParams(const int, const Dtype* , const Dtype* ,
+    Dtype* , Dtype* , unsigned int* );
+  virtual void CalculateMask(const int, const Dtype* , Dtype* ,
+    Dtype , Dtype , Dtype );
   
  public:
   Blob<Dtype> weight_tmp_;

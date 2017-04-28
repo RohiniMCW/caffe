@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <vector>
+#include <string.h>
 
 #include "caffe/filler.hpp"
 #include "caffe/layers/base_conv_layer.hpp"
@@ -13,7 +14,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   /**************** MulticoreWare_Modified - Feature: Pruning / Splicing ****************/
   // For Convolution
-  if (this->type() == "Convolution") {
+  if (!strcmp(this->type(), "Convolution")) {
   /*************************************************************************************/
   // Configure the kernel size, padding, stride, and inputs.
   ConvolutionParameter conv_param = this->layer_param_.convolution_param();
@@ -186,7 +187,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     this->param_propagate_down_.resize(this->blobs_.size(), true);
   }
   /**************** MulticoreWare_Modified - Feature: Pruning / Splicing ****************/
-  else if (this->type() == "SqueezeConvolution") {
+  else if (!strcmp(this->type(), "SqueezeConvolution")) {
     SqueezeConvolutionParameter conv_param = this->layer_param_.squeeze_convolution_param();
     force_nd_im2col_ = conv_param.force_nd_im2col();
     channel_axis_ = bottom[0]->CanonicalAxisIndex(conv_param.axis());
